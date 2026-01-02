@@ -1,0 +1,41 @@
+{
+  "name": "oracle-v2-mcp",
+  "version": "0.1.0",
+  "description": "Oracle v2 - MCP Memory Layer for querying Oracle philosophy",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "server": "tsx src/server.ts",
+    "serve": "node dist/server.js",
+    "index": "tsx src/indexer.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.31.0",
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "better-sqlite3": "^11.7.0",
+    "chromadb": "^1.9.2",
+    "chromadb-default-embed": "^2.14.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^20.17.9",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "oracle",
+    "mcp",
+    "memory",
+    "knowledge-base",
+    "semantic-search"
+  ],
+  "author": "Nat's Agents",
+  "license": "MIT"
+}
