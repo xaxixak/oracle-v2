@@ -220,3 +220,20 @@ export const traceLog = sqliteTable('trace_log', {
   index('idx_trace_parent').on(table.parentTraceId),
   index('idx_trace_created').on(table.createdAt),
 ]);
+
+// ============================================================================
+// Projects Table (with colors for categorization)
+// ============================================================================
+
+// Projects - categorize learnings by project with visual colors
+export const projects = sqliteTable('projects', {
+  id: text('id').primaryKey(),                    // slug: 'oracle-v2', 'my-app'
+  name: text('name').notNull(),                   // Display name: 'Oracle v2'
+  color: text('color').notNull(),                 // Hex color: '#a78bfa'
+  description: text('description'),               // Optional description
+  ghqPath: text('ghq_path'),                      // Full path: 'github.com/user/repo'
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (table) => [
+  index('idx_projects_name').on(table.name),
+]);

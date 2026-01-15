@@ -66,6 +66,7 @@ interface OracleSearchInput {
   limit?: number;
   offset?: number;
   mode?: 'hybrid' | 'fts' | 'vector';
+  project?: string;
 }
 
 interface OracleConsultInput {
@@ -79,6 +80,7 @@ interface OracleLearnInput {
   pattern: string;
   source?: string;
   concepts?: string[];
+  project?: string;
 }
 
 interface OracleListInput {
@@ -165,6 +167,28 @@ interface OracleSupersededInput {
   reason?: string;
 }
 
+// Project management interfaces
+interface ProjectCreateInput {
+  id: string;          // slug: 'oracle-v2'
+  name: string;        // display name: 'Oracle v2'
+  color: string;       // hex color: '#a78bfa'
+  description?: string;
+  ghqPath?: string;    // 'github.com/user/repo'
+}
+
+interface ProjectUpdateInput {
+  id: string;
+  name?: string;
+  color?: string;
+  description?: string;
+  ghqPath?: string;
+}
+
+interface ProjectListInput {
+  limit?: number;
+  offset?: number;
+}
+
 // Write tools that should be disabled in read-only mode
 const WRITE_TOOLS = [
   'oracle_learn',
@@ -174,6 +198,8 @@ const WRITE_TOOLS = [
   'oracle_decisions_update',
   'oracle_trace',
   'oracle_supersede',
+  'oracle_projects_create',
+  'oracle_projects_update',
 ];
 
 class OracleMCPServer {
@@ -335,6 +361,10 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
                 enum: ['hybrid', 'fts', 'vector'],
                 description: 'Search mode: hybrid (default), fts (keywords only), vector (semantic only)',
                 default: 'hybrid'
+              },
+              project: {
+                type: 'string',
+                description: 'Filter by project slug (e.g., "oracle-v2"). Only return results from this project.'
               }
             },
             required: ['query']
@@ -384,6 +414,10 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
                 type: 'array',
                 items: { type: 'string' },
                 description: 'Optional concept tags (e.g., ["git", "safety", "trust"])'
+              },
+              project: {
+                type: 'string',
+                description: 'Optional project slug to categorize this learning (e.g., "oracle-v2", "my-app")'
               }
             },
             required: ['pattern']
@@ -851,6 +885,88 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
             },
             required: ['oldId', 'newId']
           }
+        },
+        // ============================================================================
+        // Project Management Tools
+        // ============================================================================
+        {
+          name: 'oracle_projects_list',
+          description: 'List all projects with their colors. Projects are used to categorize learnings.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: {
+                type: 'number',
+                description: 'Maximum number of projects to return (default: 50)',
+                default: 50
+              },
+              offset: {
+                type: 'number',
+                description: 'Number of projects to skip (for pagination)',
+                default: 0
+              }
+            }
+          }
+        },
+        {
+          name: 'oracle_projects_create',
+          description: 'Create a new project with a color for categorizing learnings.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              id: {
+                type: 'string',
+                description: 'Project slug/ID (e.g., "oracle-v2", "my-app")'
+              },
+              name: {
+                type: 'string',
+                description: 'Display name (e.g., "Oracle v2", "My App")'
+              },
+              color: {
+                type: 'string',
+                description: 'Hex color code (e.g., "#a78bfa", "#10b981")'
+              },
+              description: {
+                type: 'string',
+                description: 'Optional project description'
+              },
+              ghqPath: {
+                type: 'string',
+                description: 'Optional ghq-style path (e.g., "github.com/user/repo")'
+              }
+            },
+            required: ['id', 'name', 'color']
+          }
+        },
+        {
+          name: 'oracle_projects_update',
+          description: 'Update an existing project (name, color, description).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              id: {
+                type: 'string',
+                description: 'Project ID to update'
+              },
+              name: {
+                type: 'string',
+                description: 'New display name'
+              },
+              color: {
+                type: 'string',
+                description: 'New hex color code'
+              },
+              description: {
+                type: 'string',
+                description: 'New description'
+              },
+              ghqPath: {
+                type: 'string',
+                description: 'New ghq-style path'
+              }
+            },
+            required: ['id']
+          }
         }
       ];
 
@@ -937,6 +1053,16 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
           case 'oracle_supersede':
             return await this.handleSupersede(request.params.arguments as unknown as OracleSupersededInput);
 
+          // Project management handlers
+          case 'oracle_projects_list':
+            return await this.handleProjectsList(request.params.arguments as unknown as ProjectListInput);
+
+          case 'oracle_projects_create':
+            return await this.handleProjectsCreate(request.params.arguments as unknown as ProjectCreateInput);
+
+          case 'oracle_projects_update':
+            return await this.handleProjectsUpdate(request.params.arguments as unknown as ProjectUpdateInput);
+
           default:
             throw new Error(`Unknown tool: ${request.params.name}`);
         }
@@ -981,7 +1107,7 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
    */
   private async handleSearch(input: OracleSearchInput) {
     const startTime = Date.now();
-    const { query, type = 'all', limit = 5, offset = 0, mode = 'hybrid' } = input;
+    const { query, type = 'all', limit = 5, offset = 0, mode = 'hybrid', project } = input;
 
     // Validate query
     if (!query || query.trim().length === 0) {
@@ -998,27 +1124,30 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
     // Run FTS5 search (skip if vector-only mode)
     let ftsRawResults: any[] = [];
     if (mode !== 'vector') {
-      if (type === 'all') {
-        const stmt = this.db.prepare(`
-          SELECT f.id, f.content, d.type, d.source_file, d.concepts, rank
-          FROM oracle_fts f
-          JOIN oracle_documents d ON f.id = d.id
-          WHERE oracle_fts MATCH ?
-          ORDER BY rank
-          LIMIT ?
-        `);
-        ftsRawResults = stmt.all(safeQuery, limit * 2);
-      } else {
-        const stmt = this.db.prepare(`
-          SELECT f.id, f.content, d.type, d.source_file, d.concepts, rank
-          FROM oracle_fts f
-          JOIN oracle_documents d ON f.id = d.id
-          WHERE oracle_fts MATCH ? AND d.type = ?
-          ORDER BY rank
-          LIMIT ?
-        `);
-        ftsRawResults = stmt.all(safeQuery, type, limit * 2);
+      // Build query with optional type and project filters
+      const conditions = ['oracle_fts MATCH ?'];
+      const params: (string | number)[] = [safeQuery];
+
+      if (type !== 'all') {
+        conditions.push('d.type = ?');
+        params.push(type);
       }
+      if (project) {
+        conditions.push('d.project = ?');
+        params.push(project);
+      }
+
+      params.push(limit * 2);
+
+      const stmt = this.db.prepare(`
+        SELECT f.id, f.content, d.type, d.source_file, d.concepts, d.project, rank
+        FROM oracle_fts f
+        JOIN oracle_documents d ON f.id = d.id
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY rank
+        LIMIT ?
+      `);
+      ftsRawResults = stmt.all(...params);
     }
 
     // Run vector search (skip if fts-only mode)
@@ -1047,6 +1176,7 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
       content: row.content.substring(0, 500), // Truncate for readability
       source_file: row.source_file,
       concepts: JSON.parse(row.concepts || '[]') as string[],
+      project: row.project || null,
       score: this.normalizeFtsScore(row.rank),
       source: 'fts' as const,
     }));
@@ -1085,6 +1215,7 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
       vectorMatches: number;
       sources: { fts: number; vector: number; hybrid: number };
       searchTime: number;
+      project?: string;
       warning?: string;
     } = {
       mode,
@@ -1101,13 +1232,18 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
       searchTime,
     };
 
+    // Add project filter to metadata if used
+    if (project) {
+      metadata.project = project;
+    }
+
     // Add warning if vector search failed
     if (warning) {
       metadata.warning = warning;
     }
 
     // Log the search to console
-    console.error(`[MCP:SEARCH] "${query}" (${type}, ${mode}) → ${results.length} results in ${searchTime}ms`);
+    console.error(`[MCP:SEARCH] "${query}" (${type}, ${mode}${project ? `, project:${project}` : ''}) → ${results.length} results in ${searchTime}ms`);
 
     // Log to database (so Activity page and session stats include MCP searches)
     try {
@@ -1249,7 +1385,7 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
    * Add new pattern/learning to knowledge base
    */
   private async handleLearn(input: OracleLearnInput) {
-    const { pattern, source, concepts } = input;
+    const { pattern, source, concepts, project } = input;
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -1273,14 +1409,19 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
     // Generate title from pattern
     const title = pattern.split('\n')[0].substring(0, 80);
 
-    // Create frontmatter
+    // Create frontmatter (include project if provided)
     const conceptsList = concepts || [];
-    const frontmatter = [
+    const frontmatterLines = [
       '---',
       `title: ${title}`,
       conceptsList.length > 0 ? `tags: [${conceptsList.join(', ')}]` : 'tags: []',
       `created: ${dateStr}`,
       `source: ${source || 'Oracle Learn'}`,
+    ];
+    if (project) {
+      frontmatterLines.push(`project: ${project}`);
+    }
+    frontmatterLines.push(
       '---',
       '',
       `# ${title}`,
@@ -1290,7 +1431,8 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
       '---',
       '*Added via Oracle Learn*',
       ''
-    ].join('\n');
+    );
+    const frontmatter = frontmatterLines.join('\n');
 
     // Write file
     fs.writeFileSync(filePath, frontmatter, 'utf-8');
@@ -1310,9 +1452,9 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
       now.getTime(),
       now.getTime(),
       now.getTime(),
-      null,           // origin: null = universal/mother
-      null,           // project: null = universal
-      'oracle_learn'  // created_by
+      null,                  // origin: null = universal/mother
+      project || null,       // project: slug or null
+      'oracle_learn'         // created_by
     );
 
     // Insert into FTS
@@ -1332,7 +1474,8 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
           success: true,
           file: `ψ/memory/learnings/${filename}`,
           id,
-          message: `Pattern added to Oracle knowledge base`
+          project: project || null,
+          message: `Pattern added to Oracle knowledge base${project ? ` (project: ${project})` : ''}`
         }, null, 2)
       }]
     };
@@ -2221,6 +2364,228 @@ Philosophy: "Nothing is Deleted" — All interactions logged.`,
           reason: reason || null,
           superseded_at: new Date(now).toISOString(),
           message: `"${oldId}" is now marked as superseded by "${newId}". It will still appear in searches with a warning.`
+        }, null, 2)
+      }]
+    };
+  }
+
+  // ============================================================================
+  // Project Management Handlers
+  // ============================================================================
+
+  /**
+   * List all projects with their colors
+   */
+  private async handleProjectsList(input: ProjectListInput) {
+    const limit = input.limit ?? 50;
+    const offset = input.offset ?? 0;
+
+    // Ensure projects table exists
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        description TEXT,
+        ghq_path TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+
+    const projects = this.db.query(`
+      SELECT
+        p.id,
+        p.name,
+        p.color,
+        p.description,
+        p.ghq_path as ghqPath,
+        p.created_at as createdAt,
+        p.updated_at as updatedAt,
+        (SELECT COUNT(*) FROM oracle_documents d WHERE d.project = p.id) as learningCount
+      FROM projects p
+      ORDER BY p.name ASC
+      LIMIT ? OFFSET ?
+    `).all(limit, offset) as Array<{
+      id: string;
+      name: string;
+      color: string;
+      description: string | null;
+      ghqPath: string | null;
+      createdAt: number;
+      updatedAt: number;
+      learningCount: number;
+    }>;
+
+    const total = (this.db.query('SELECT COUNT(*) as count FROM projects').get() as { count: number }).count;
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          projects: projects.map(p => ({
+            id: p.id,
+            name: p.name,
+            color: p.color,
+            description: p.description,
+            ghqPath: p.ghqPath,
+            learningCount: p.learningCount,
+            createdAt: new Date(p.createdAt).toISOString(),
+            updatedAt: new Date(p.updatedAt).toISOString()
+          })),
+          total,
+          limit,
+          offset
+        }, null, 2)
+      }]
+    };
+  }
+
+  /**
+   * Create a new project with color
+   */
+  private async handleProjectsCreate(input: ProjectCreateInput) {
+    const { id, name, color, description, ghqPath } = input;
+    const now = Date.now();
+
+    // Validate color format
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+      throw new Error(`Invalid color format: ${color}. Use hex format like #a78bfa`);
+    }
+
+    // Ensure projects table exists
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        description TEXT,
+        ghq_path TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+
+    // Check if project already exists
+    const existing = this.db.query('SELECT id FROM projects WHERE id = ?').get(id);
+    if (existing) {
+      throw new Error(`Project already exists: ${id}`);
+    }
+
+    // Insert project
+    this.db.run(
+      'INSERT INTO projects (id, name, color, description, ghq_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, name, color, description || null, ghqPath || null, now, now]
+    );
+
+    console.error(`[MCP:PROJECTS] Created project: ${id} (${name}) with color ${color}`);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          project: {
+            id,
+            name,
+            color,
+            description: description || null,
+            ghqPath: ghqPath || null,
+            createdAt: new Date(now).toISOString()
+          },
+          message: `Project "${name}" created with color ${color}`
+        }, null, 2)
+      }]
+    };
+  }
+
+  /**
+   * Update an existing project
+   */
+  private async handleProjectsUpdate(input: ProjectUpdateInput) {
+    const { id, name, color, description, ghqPath } = input;
+    const now = Date.now();
+
+    // Validate color format if provided
+    if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+      throw new Error(`Invalid color format: ${color}. Use hex format like #a78bfa`);
+    }
+
+    // Check if project exists
+    const existing = this.db.query('SELECT * FROM projects WHERE id = ?').get(id) as {
+      id: string;
+      name: string;
+      color: string;
+      description: string | null;
+      ghq_path: string | null;
+    } | null;
+
+    if (!existing) {
+      throw new Error(`Project not found: ${id}`);
+    }
+
+    // Build update query dynamically
+    const updates: string[] = [];
+    const values: (string | number | null)[] = [];
+
+    if (name !== undefined) {
+      updates.push('name = ?');
+      values.push(name);
+    }
+    if (color !== undefined) {
+      updates.push('color = ?');
+      values.push(color);
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      values.push(description);
+    }
+    if (ghqPath !== undefined) {
+      updates.push('ghq_path = ?');
+      values.push(ghqPath);
+    }
+
+    if (updates.length === 0) {
+      throw new Error('No fields to update');
+    }
+
+    updates.push('updated_at = ?');
+    values.push(now);
+    values.push(id);
+
+    this.db.run(
+      `UPDATE projects SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    console.error(`[MCP:PROJECTS] Updated project: ${id}`);
+
+    // Fetch updated project
+    const updated = this.db.query('SELECT * FROM projects WHERE id = ?').get(id) as {
+      id: string;
+      name: string;
+      color: string;
+      description: string | null;
+      ghq_path: string | null;
+      created_at: number;
+      updated_at: number;
+    };
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          project: {
+            id: updated.id,
+            name: updated.name,
+            color: updated.color,
+            description: updated.description,
+            ghqPath: updated.ghq_path,
+            createdAt: new Date(updated.created_at).toISOString(),
+            updatedAt: new Date(updated.updated_at).toISOString()
+          },
+          message: `Project "${updated.name}" updated`
         }, null, 2)
       }]
     };

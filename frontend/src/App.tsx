@@ -12,6 +12,7 @@ import { Handoff } from './pages/Handoff';
 import { Activity } from './pages/Activity';
 import { Forum } from './pages/Forum';
 import { Decisions } from './pages/Decisions';
+import { Projects } from './pages/Projects';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/activity" element={<Activity />} />
         <Route path="/forum" element={<Forum />} />
         <Route path="/decisions" element={<Decisions />} />
+        <Route path="/projects" element={<Projects />} />
       </Routes>
       <QuickLearn />
     </BrowserRouter>

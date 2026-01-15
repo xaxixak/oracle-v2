@@ -1,0 +1,271 @@
+.container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.title {
+  color: #a78bfa;
+  font-size: 24px;
+  margin: 0;
+}
+
+.subtitle {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0;
+}
+
+.newButton {
+  align-self: flex-start;
+  padding: 8px 16px;
+  background: #a78bfa;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.newButton:hover {
+  background: #8b5cf6;
+}
+
+.error {
+  background: #ef44441a;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.loading, .empty {
+  text-align: center;
+  color: #6b7280;
+  padding: 40px;
+}
+
+.empty p {
+  margin: 8px 0;
+}
+
+/* Grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+/* Card */
+.card {
+  background: #1f2937;
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid #a78bfa;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.colorDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cardHeader h3 {
+  margin: 0;
+  color: #f3f4f6;
+  font-size: 16px;
+}
+
+.description {
+  color: #9ca3af;
+  font-size: 13px;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.count {
+  color: #a78bfa;
+}
+
+.ghqPath {
+  font-family: monospace;
+}
+
+.cardActions {
+  display: flex;
+  gap: 8px;
+}
+
+.cardActions button {
+  padding: 6px 12px;
+  background: #374151;
+  color: #d1d5db;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.cardActions button:hover {
+  background: #4b5563;
+}
+
+.cardActions button.danger {
+  color: #f87171;
+}
+
+.cardActions button.danger:hover {
+  background: #ef44441a;
+}
+
+/* Form Overlay */
+.formOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.form {
+  background: #1f2937;
+  padding: 24px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 450px;
+}
+
+.form h2 {
+  color: #f3f4f6;
+  margin: 0 0 20px 0;
+  font-size: 18px;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.field input, .field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  color: #f3f4f6;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.field input:focus, .field textarea:focus {
+  outline: none;
+  border-color: #a78bfa;
+}
+
+.field textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+/* Color Picker */
+.colorPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.colorSwatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.colorSwatch:hover {
+  transform: scale(1.1);
+}
+
+.colorSwatch.selected {
+  border-color: white;
+  box-shadow: 0 0 0 2px #a78bfa;
+}
+
+.customColor {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+
+/* Form Actions */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.formActions button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.formActions button:first-child {
+  background: #374151;
+  color: #d1d5db;
+}
+
+.formActions button.primary {
+  background: #a78bfa;
+  color: white;
+}
+
+.formActions button:hover {
+  opacity: 0.9;
+}

@@ -564,6 +564,180 @@ app.post('/api/ask', async (c) => {
 });
 
 // ============================================================================
+// Projects API
+// ============================================================================
+
+// Ensure projects table exists
+db.exec(`
+  CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL,
+    description TEXT,
+    ghq_path TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+
+// List all projects
+app.get('/api/projects', (c) => {
+  const limit = parseInt(c.req.query('limit') || '50');
+  const offset = parseInt(c.req.query('offset') || '0');
+
+  const projects = db.query(`
+    SELECT
+      p.id,
+      p.name,
+      p.color,
+      p.description,
+      p.ghq_path as ghqPath,
+      p.created_at as createdAt,
+      p.updated_at as updatedAt,
+      (SELECT COUNT(*) FROM oracle_documents d WHERE d.project = p.id) as learningCount
+    FROM projects p
+    ORDER BY p.name ASC
+    LIMIT ? OFFSET ?
+  `).all(limit, offset) as Array<{
+    id: string;
+    name: string;
+    color: string;
+    description: string | null;
+    ghqPath: string | null;
+    createdAt: number;
+    updatedAt: number;
+    learningCount: number;
+  }>;
+
+  const total = (db.query('SELECT COUNT(*) as count FROM projects').get() as { count: number }).count;
+
+  return c.json({
+    projects: projects.map(p => ({
+      id: p.id,
+      name: p.name,
+      color: p.color,
+      description: p.description,
+      ghqPath: p.ghqPath,
+      learningCount: p.learningCount,
+      createdAt: new Date(p.createdAt).toISOString(),
+      updatedAt: new Date(p.updatedAt).toISOString()
+    })),
+    total,
+    limit,
+    offset
+  });
+});
+
+// Create a new project
+app.post('/api/projects', async (c) => {
+  try {
+    const data = await c.req.json();
+    const { id, name, color, description, ghqPath } = data;
+
+    if (!id || !name || !color) {
+      return c.json({ error: 'Missing required fields: id, name, color' }, 400);
+    }
+
+    // Validate color format
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+      return c.json({ error: `Invalid color format: ${color}. Use hex format like #a78bfa` }, 400);
+    }
+
+    // Check if project already exists
+    const existing = db.query('SELECT id FROM projects WHERE id = ?').get(id);
+    if (existing) {
+      return c.json({ error: `Project already exists: ${id}` }, 409);
+    }
+
+    const now = Date.now();
+    db.run(
+      'INSERT INTO projects (id, name, color, description, ghq_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, name, color, description || null, ghqPath || null, now, now]
+    );
+
+    return c.json({
+      success: true,
+      project: { id, name, color, description, ghqPath, createdAt: new Date(now).toISOString() }
+    });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
+
+// Update a project
+app.put('/api/projects/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const data = await c.req.json();
+    const { name, color, description, ghqPath } = data;
+
+    // Validate color format if provided
+    if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+      return c.json({ error: `Invalid color format: ${color}. Use hex format like #a78bfa` }, 400);
+    }
+
+    // Check if project exists
+    const existing = db.query('SELECT * FROM projects WHERE id = ?').get(id);
+    if (!existing) {
+      return c.json({ error: `Project not found: ${id}` }, 404);
+    }
+
+    const updates: string[] = [];
+    const values: (string | number | null)[] = [];
+
+    if (name !== undefined) { updates.push('name = ?'); values.push(name); }
+    if (color !== undefined) { updates.push('color = ?'); values.push(color); }
+    if (description !== undefined) { updates.push('description = ?'); values.push(description); }
+    if (ghqPath !== undefined) { updates.push('ghq_path = ?'); values.push(ghqPath); }
+
+    if (updates.length === 0) {
+      return c.json({ error: 'No fields to update' }, 400);
+    }
+
+    const now = Date.now();
+    updates.push('updated_at = ?');
+    values.push(now);
+    values.push(id);
+
+    db.run(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`, values);
+
+    const updated = db.query('SELECT * FROM projects WHERE id = ?').get(id) as {
+      id: string; name: string; color: string; description: string | null;
+      ghq_path: string | null; created_at: number; updated_at: number;
+    };
+
+    return c.json({
+      success: true,
+      project: {
+        id: updated.id,
+        name: updated.name,
+        color: updated.color,
+        description: updated.description,
+        ghqPath: updated.ghq_path,
+        createdAt: new Date(updated.created_at).toISOString(),
+        updatedAt: new Date(updated.updated_at).toISOString()
+      }
+    });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
+
+// Delete a project
+app.delete('/api/projects/:id', (c) => {
+  const id = c.req.param('id');
+
+  const existing = db.query('SELECT id FROM projects WHERE id = ?').get(id);
+  if (!existing) {
+    return c.json({ error: `Project not found: ${id}` }, 404);
+  }
+
+  db.run('DELETE FROM projects WHERE id = ?', [id]);
+
+  return c.json({ success: true, message: `Project "${id}" deleted` });
+});
+
+// ============================================================================
 // Legacy HTML UIs
 // ============================================================================
 
