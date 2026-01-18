@@ -21,8 +21,21 @@ export const DASHBOARD_PATH = path.join(__dirname, '..', 'dashboard.html');
 export const ARTHUR_UI_PATH = path.join(__dirname, '..', 'arthur.html');
 
 // REPO_ROOT for features that need knowledge base context
-// Defaults to ~/.oracle-v2 for bunx installs, or set via ORACLE_REPO_ROOT
-export const REPO_ROOT = process.env.ORACLE_REPO_ROOT || ORACLE_DATA_DIR;
+// Priority: ORACLE_REPO_ROOT env > detect from __dirname > ~/.oracle-v2 fallback
+function detectRepoRoot(): string {
+  if (process.env.ORACLE_REPO_ROOT) {
+    return process.env.ORACLE_REPO_ROOT;
+  }
+  // If running from src/server/, go up 2 levels to project root
+  const projectRoot = path.resolve(__dirname, '..', '..');
+  const psiPath = path.join(projectRoot, 'ψ');
+  if (fs.existsSync(psiPath)) {
+    return projectRoot;
+  }
+  // Fallback for bunx installs
+  return ORACLE_DATA_DIR;
+}
+export const REPO_ROOT = detectRepoRoot();
 
 // Ensure data directory exists (for fresh installs via bunx)
 if (!fs.existsSync(ORACLE_DATA_DIR)) {

@@ -669,7 +669,7 @@ export function handleGraph() {
  * @param project - ghq-style project path (null = universal)
  * @param cwd - Auto-detect project from cwd if project not specified
  */
-export function handleLearn(
+export async function handleLearn(
   pattern: string,
   source?: string,
   concepts?: string[],
@@ -720,8 +720,8 @@ export function handleLearn(
     ''
   ].join('\n');
 
-  // Write file
-  fs.writeFileSync(filePath, frontmatter, 'utf-8');
+  // Write file with explicit UTF-8 encoding
+  await Bun.write(filePath, new TextEncoder().encode(frontmatter));
 
   // Re-index the new file
   const content = frontmatter;

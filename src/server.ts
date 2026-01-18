@@ -527,7 +527,7 @@ app.post('/api/learn', async (c) => {
     if (!data.pattern) {
       return c.json({ error: 'Missing required field: pattern' }, 400);
     }
-    const result = handleLearn(
+    const result = await handleLearn(
       data.pattern,
       data.source,
       data.concepts,
